@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #0f172a;
+    color: #f1f5f9;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1e293b;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+}
+
+@layer components {
+  .gs-card {
+    @apply bg-gs-card rounded-xl border border-gs-border p-6 transition-all duration-300 hover:border-gs-teal/30;
+  }
+
+  .gs-btn-primary {
+    @apply bg-gs-teal hover:bg-gs-teal-dark text-white font-semibold py-2.5 px-6 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gs-teal/20;
+  }
+
+  .gs-btn-secondary {
+    @apply bg-gs-card border border-gs-border hover:border-gs-teal text-gs-text font-medium py-2.5 px-6 rounded-lg transition-all duration-200;
+  }
+
+  .gs-btn-danger {
+    @apply bg-gs-danger/20 border border-gs-danger/40 hover:bg-gs-danger/30 text-gs-danger font-medium py-2.5 px-6 rounded-lg transition-all duration-200;
+  }
+
+  .gs-input {
+    @apply w-full bg-gs-bg border border-gs-border rounded-lg px-4 py-3 text-gs-text placeholder-gs-text-muted focus:outline-none focus:border-gs-teal focus:ring-1 focus:ring-gs-teal transition-all duration-200;
+  }
+
+  .gs-select {
+    @apply w-full bg-gs-bg border border-gs-border rounded-lg px-4 py-3 text-gs-text focus:outline-none focus:border-gs-teal focus:ring-1 focus:ring-gs-teal transition-all duration-200 appearance-none;
+  }
+
+  .gs-badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .gs-badge-success {
+    @apply gs-badge bg-gs-success/20 text-gs-success;
+  }
+
+  .gs-badge-warning {
+    @apply gs-badge bg-gs-warning/20 text-gs-warning;
+  }
+
+  .gs-badge-danger {
+    @apply gs-badge bg-gs-danger/20 text-gs-danger;
+  }
+
+  .gs-badge-teal {
+    @apply gs-badge bg-gs-teal/20 text-gs-teal;
+  }
+
+  .gs-gradient-text {
+    @apply bg-gradient-to-r from-gs-teal to-emerald-400 bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out;
+  }
+
+  .animate-pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 5px rgba(20, 184, 166, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(20, 184, 166, 0.6); }
+}
