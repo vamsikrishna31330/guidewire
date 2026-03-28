@@ -1,67 +1,121 @@
-# GigShield — AI-Powered Parametric Insurance for Gig Workers
+﻿# GigShield
 
-> **Team Syntax Shields** | Guidewire DEVTrails 2026
+GigShield is a full-stack AI-powered parametric insurance platform for gig economy delivery workers in India, built for the Guidewire DEVTrails Hackathon 2026 Phase 2 scale round.
 
-🛡️ GigShield automatically triggers insurance payouts for Indian gig delivery workers (Zomato, Swiggy, Zepto, Blinkit) when real-world disruptions — extreme weather, AQI spikes, curfews — are detected in their delivery zone. **Zero paperwork, zero manual claims.**
+## Stack
 
----
+- Frontend: React + Vite + TailwindCSS + React Router v6
+- Backend: Node.js + Express.js REST API
+- Database: MongoDB Atlas with Mongoose
+- Auth: JWT + bcryptjs
+- External APIs: OpenWeatherMap and AQICN with deterministic fallback data when API keys are missing
 
-## Tech Stack
+## Project structure
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 18 + Vite + Tailwind CSS |
-| Backend | Java 21 + Spring Boot 3.x |
-| Database | Supabase (PostgreSQL) |
-| ML Service | Python 3.11 + FastAPI + scikit-learn |
-| Auth | Supabase Auth (JWT) |
-| Weather API | OpenWeatherMap |
-| AQI API | AQICN |
-
-## Quick Start
-
-### 1. Train ML Model (run once)
-```bash
-cd ml-service
-pip install -r requirements.txt
-python train_model.py
+```text
+gigshield/
+├── client/
+├── server/
+├── .env.example
+└── README.md
 ```
 
-### 2. Start ML Service
-```bash
-cd ml-service
-uvicorn main:app --reload --port 8000
-```
+## Setup
 
-### 3. Start Backend
-```bash
-cd backend
-# Copy .env.example to .env and fill in values
-./mvnw spring-boot:run
-```
+1. Copy `.env.example` to `.env` in the repo root and fill in your MongoDB Atlas connection string and JWT secret.
+2. Install backend dependencies:
+   ```bash
+   cd server
+   npm install
+   ```
+3. Install frontend dependencies:
+   ```bash
+   cd client
+   npm install
+   ```
+4. Seed the demo database:
+   ```bash
+   cd server
+   npm run seed
+   ```
+5. Start the backend:
+   ```bash
+   cd server
+   npm run dev
+   ```
+6. Start the frontend in a second terminal:
+   ```bash
+   cd client
+   npm run dev
+   ```
 
-### 4. Start Frontend
-```bash
-cd client
-npm install
-npm run dev
-```
+The frontend talks to `http://localhost:5000` by default. Override with `VITE_API_BASE_URL` if needed.
 
-## Environment Setup
+## Demo credentials
 
-Copy `.env.example` files in `client/`, `backend/`, and `ml-service/` and fill with your Supabase credentials and API keys.
+After running the seed script:
 
-## Features (Phase 2)
+- `arjun@gigshield.demo` / `Password@123`
+- `priya@gigshield.demo` / `Password@123`
 
-- ✅ Supabase Auth (email/password)
-- ✅ AI-powered premium calculation (RandomForest ML model)
-- ✅ Automatic trigger engine (weather, AQI monitoring every 30 min)
-- ✅ Auto-claim creation on disruption detection
-- ✅ Admin panel with manual triggers (curfew/flood)
-- ✅ Anti-fraud placeholders (FCS hooks for Phase 3)
-- ✅ Real-time notification system
-- ✅ 10 Indian city zones supported
+## API overview
 
-## License
+### Auth
 
-MIT © 2026 Team Syntax Shields
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+
+### Dashboard
+
+- `GET /api/dashboard/summary`
+- `GET /api/notifications/my`
+
+### Policy
+
+- `GET /api/policy/quote?city=Bengaluru&pincode=560001`
+- `POST /api/policy/purchase`
+- `GET /api/policy/my`
+
+### Claims
+
+- `GET /api/claims/my`
+- `POST /api/claims/submit`
+- `PUT /api/claims/:id/verify`
+
+### Payouts
+
+- `POST /api/payouts/process/:claimId`
+- `GET /api/payouts/my`
+
+### Admin
+
+- `GET /api/admin/disruptions`
+- `GET /api/admin/claims`
+- `PUT /api/admin/claims/:id`
+- `POST /api/admin/trigger-curfew`
+
+## Risk engine
+
+Premium quote logic uses:
+
+- `Risk Score = (rain_mm * 2) + (wind_speed * 1.5) + (AQI / 50) + 10`
+- `Weekly Premium = Risk Score * 2.5`, clamped between `INR 49` and `INR 199`
+- `Coverage Amount = Weekly Premium * 8`
+
+## Automated trigger engine
+
+A cron job runs every 30 minutes and checks active policy zones for:
+
+- Heavy rain above 10 mm/hr
+- Extreme heat above 42 C
+- AQI above 300
+- High wind above 50 km/h
+- Simulated curfew events through the admin route
+
+When a disruption is detected, GigShield creates a `DisruptionEvent`, auto-creates pending claims, and stores worker notifications in MongoDB.
+
+## Notes for judges
+
+- If API keys are omitted, the app still works with deterministic fallback weather and AQI values.
+- The repo still contains some legacy hackathon prototype folders, but the production implementation for this deliverable is the `client/` and `server/` app described above.

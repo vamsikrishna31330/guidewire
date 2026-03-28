@@ -1,123 +1,114 @@
-import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { HiShieldCheck, HiMenu, HiX } from 'react-icons/hi'
-import NotificationBell from './NotificationBell'
+﻿import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { FiMenu, FiShield, FiX } from "react-icons/fi";
+import { useAuth } from "../context/AuthContext";
+
+const navItems = [
+  { to: "/get-quote", label: "Quote" },
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/policy", label: "Policy" },
+  { to: "/claims", label: "Claims" },
+  { to: "/admin", label: "Admin" },
+];
 
 export default function Navbar() {
-  const { user, worker, signOut } = useAuth()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth();
 
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/')
-  }
-
-  const navLinks = user ? [
-    { to: '/dashboard', label: 'Dashboard' },
-    { to: '/buy-policy', label: 'Buy Policy' },
-    { to: '/claims', label: 'Claims' },
-  ] : []
-
-  if (worker?.isAdmin) {
-    navLinks.push({ to: '/admin', label: 'Admin' })
-  }
-
-  const isActive = (path) => location.pathname === path
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+    setOpen(false);
+  };
 
   return (
-    <nav className="sticky top-0 z-50 bg-gs-bg/80 backdrop-blur-xl border-b border-gs-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to={user ? '/dashboard' : '/'} className="flex items-center space-x-2 group">
-            <HiShieldCheck className="w-8 h-8 text-gs-teal group-hover:scale-110 transition-transform" />
-            <span className="text-xl font-bold gs-gradient-text">GigShield</span>
-          </Link>
-
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-1">
-            {navLinks.map(link => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
-                  ${isActive(link.to) 
-                    ? 'bg-gs-teal/10 text-gs-teal' 
-                    : 'text-gs-text-muted hover:text-gs-text hover:bg-gs-card'
-                  }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <NavLink to="/" className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-400 to-cyan-300 text-slate-950 shadow-lg shadow-teal-500/20">
+            <FiShield className="text-xl" />
           </div>
+          <div>
+            <p className="text-lg font-extrabold tracking-tight text-white">GigShield</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-teal-300/80">Parametric cover for riders</p>
+          </div>
+        </NavLink>
 
-          {/* Right section */}
-          <div className="flex items-center space-x-3">
-            {user && <NotificationBell />}
-            {user ? (
-              <div className="hidden md:flex items-center space-x-3">
-                <span className="text-sm text-gs-text-muted">
-                  {worker?.name || user.email}
-                </span>
-                <button
-                  onClick={handleSignOut}
-                  className="text-sm text-gs-text-muted hover:text-gs-danger transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <div className="hidden md:flex items-center space-x-2">
-                <Link to="/login" className="gs-btn-secondary text-sm !py-2 !px-4">Login</Link>
-                <Link to="/register" className="gs-btn-primary text-sm !py-2 !px-4">Get Started</Link>
-              </div>
-            )}
-
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setMobileOpen(!mobileOpen)}
-              className="md:hidden p-2 text-gs-text-muted hover:text-gs-text"
+        <nav className="hidden items-center gap-6 md:flex">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `text-sm font-medium transition ${isActive ? "text-teal-300" : "text-slate-300 hover:text-white"}`
+              }
             >
-              {mobileOpen ? <HiX className="w-6 h-6" /> : <HiMenu className="w-6 h-6" />}
-            </button>
-          </div>
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="hidden items-center gap-3 md:flex">
+          {isAuthenticated ? (
+            <>
+              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
+                {user?.name}
+              </div>
+              <button onClick={handleLogout} className="gs-btn-secondary">
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <NavLink to="/login" className="gs-btn-secondary">
+                Login
+              </NavLink>
+              <NavLink to="/register" className="gs-btn-primary">
+                Register
+              </NavLink>
+            </>
+          )}
         </div>
+
+        <button
+          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100 md:hidden"
+          onClick={() => setOpen((current) => !current)}
+        >
+          {open ? <FiX /> : <FiMenu />}
+        </button>
       </div>
 
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="md:hidden bg-gs-card border-t border-gs-border animate-slide-up">
-          <div className="px-4 py-3 space-y-1">
-            {navLinks.map(link => (
-              <Link
-                key={link.to}
-                to={link.to}
-                onClick={() => setMobileOpen(false)}
-                className={`block px-4 py-3 rounded-lg text-sm font-medium transition-colors
-                  ${isActive(link.to) ? 'bg-gs-teal/10 text-gs-teal' : 'text-gs-text-muted hover:text-gs-text'}`}
+      {open ? (
+        <div className="border-t border-white/10 bg-slate-950/95 md:hidden">
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200"
+                onClick={() => setOpen(false)}
               >
-                {link.label}
-              </Link>
+                {item.label}
+              </NavLink>
             ))}
-            {user ? (
-              <button
-                onClick={() => { handleSignOut(); setMobileOpen(false) }}
-                className="w-full text-left px-4 py-3 text-sm text-gs-danger"
-              >
-                Sign Out
+            {isAuthenticated ? (
+              <button onClick={handleLogout} className="gs-btn-secondary w-full">
+                Logout
               </button>
             ) : (
               <>
-                <Link to="/login" onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-sm text-gs-text-muted">Login</Link>
-                <Link to="/register" onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-sm text-gs-teal">Get Started</Link>
+                <NavLink to="/login" className="gs-btn-secondary text-center" onClick={() => setOpen(false)}>
+                  Login
+                </NavLink>
+                <NavLink to="/register" className="gs-btn-primary text-center" onClick={() => setOpen(false)}>
+                  Register
+                </NavLink>
               </>
             )}
           </div>
         </div>
-      )}
-    </nav>
-  )
+      ) : null}
+    </header>
+  );
 }

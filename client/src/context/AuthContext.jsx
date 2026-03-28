@@ -1,105 +1,101 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import api from '../utils/api'
+﻿import { createContext, useContext, useEffect, useState } from "react";
+import api from "../utils/api";
 
-const AuthContext = createContext({})
+const AuthContext = createContext(null);
 
-export const useAuth = () => useContext(AuthContext)
+export const useAuth = () => useContext(AuthContext);
+
+const getStoredWorker = () => {
+  const raw = localStorage.getItem("gigshield_worker");
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+};
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [worker, setWorker] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(getStoredWorker);
+  const [loading, setLoading] = useState(true);
+
+  const clearSession = () => {
+    localStorage.removeItem("gigshield_token");
+    localStorage.removeItem("gigshield_worker");
+    setUser(null);
+  };
+
+  const persistSession = (token, worker) => {
+    localStorage.setItem("gigshield_token", token);
+    localStorage.setItem("gigshield_worker", JSON.stringify(worker));
+    setUser(worker);
+  };
+
+  const refreshUser = async () => {
+    const token = localStorage.getItem("gigshield_token");
+
+    if (!token) {
+      setLoading(false);
+      return null;
+    }
+
+    try {
+      const response = await api.get("/api/auth/me");
+      persistSession(token, response.data.data.worker);
+      return response.data.data.worker;
+    } catch (error) {
+      clearSession();
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Check active session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUser(session.user)
-        localStorage.setItem('gs_access_token', session.access_token)
-        fetchWorkerProfile()
-      }
-      setLoading(false)
-    })
+    refreshUser();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session) {
-          setUser(session.user)
-          localStorage.setItem('gs_access_token', session.access_token)
-          fetchWorkerProfile()
-        } else {
-          setUser(null)
-          setWorker(null)
-          localStorage.removeItem('gs_access_token')
-        }
-      }
-    )
+    const handleForcedLogout = () => {
+      clearSession();
+      setLoading(false);
+    };
 
-    return () => subscription.unsubscribe()
-  }, [])
+    window.addEventListener("gigshield:logout", handleForcedLogout);
+    return () => window.removeEventListener("gigshield:logout", handleForcedLogout);
+  }, []);
 
-  const fetchWorkerProfile = async () => {
-    try {
-      const res = await api.get('/api/workers/me')
-      setWorker(res.data)
-    } catch (err) {
-      // Profile may not exist yet (new signup)
-      console.log('No worker profile found:', err.message)
-    }
-  }
+  const registerUser = async (payload) => {
+    const response = await api.post("/api/auth/register", payload);
+    persistSession(response.data.data.token, response.data.data.worker);
+    return response.data.data.worker;
+  };
 
-  const signUp = async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-    if (error) throw error
-    return data
-  }
+  const loginUser = async (payload) => {
+    const response = await api.post("/api/auth/login", payload);
+    persistSession(response.data.data.token, response.data.data.worker);
+    return response.data.data.worker;
+  };
 
-  const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    if (error) throw error
-    return data
-  }
-
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    setUser(null)
-    setWorker(null)
-    localStorage.removeItem('gs_access_token')
-  }
-
-  const createWorkerProfile = async (profileData) => {
-    try {
-      const res = await api.post('/api/workers/profile', profileData)
-      setWorker(res.data)
-      return res.data
-    } catch (err) {
-      throw new Error(err.response?.data?.error || 'Failed to create profile')
-    }
-  }
-
-  const value = {
-    user,
-    worker,
-    loading,
-    signUp,
-    signIn,
-    signOut,
-    createWorkerProfile,
-    fetchWorkerProfile,
-  }
+  const logout = () => {
+    clearSession();
+  };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        isAuthenticated: Boolean(user),
+        registerUser,
+        loginUser,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
-  )
+  );
 }

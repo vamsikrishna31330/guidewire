@@ -1,140 +1,192 @@
-import { useState, useEffect } from 'react'
-import api from '../utils/api'
-import TriggerBadge from '../components/TriggerBadge'
-import { HiShieldCheck, HiDocumentText, HiCurrencyRupee, HiClock } from 'react-icons/hi'
+﻿import { useEffect, useState } from "react";
+import LoadingSpinner from "../components/LoadingSpinner";
+import StatusBadge from "../components/StatusBadge";
+import api, { getApiError } from "../utils/api";
+import { formatCurrency, formatDate, titleize } from "../utils/formatters";
 
-const PINCODES = ['500001','600001','400001','110001','560001','700001','411001','530001','522001','521001']
+const scoreTone = (score) => {
+  if (score < 30) {
+    return "active";
+  }
+
+  if (score <= 70) {
+    return "pending_verification";
+  }
+
+  return "flagged_fraud";
+};
 
 export default function AdminPanel() {
-  const [stats, setStats] = useState(null)
-  const [claims, setClaims] = useState([])
-  const [disruptions, setDisruptions] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [triggerForm, setTriggerForm] = useState({ pincode: '500001', triggerType: 'curfew' })
-  const [triggerLoading, setTriggerLoading] = useState(false)
+  const [disruptions, setDisruptions] = useState([]);
+  const [claims, setClaims] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [curfewForm, setCurfewForm] = useState({ city: "Bengaluru", pincode: "560001" });
 
-  useEffect(() => { fetchData() }, [])
+  const loadAdminData = async () => {
+    setLoading(true);
+    setError("");
 
-  const fetchData = async () => {
     try {
-      const [s, c, d] = await Promise.all([
-        api.get('/api/admin/stats').catch(() => ({ data: {} })),
-        api.get('/api/claims/all').catch(() => ({ data: [] })),
-        api.get('/api/admin/disruptions').catch(() => ({ data: [] })),
-      ])
-      setStats(s.data)
-      setClaims(c.data)
-      setDisruptions(d.data)
-    } catch (err) { console.error(err) }
-    setLoading(false)
-  }
+      const [disruptionsResponse, claimsResponse] = await Promise.all([
+        api.get("/api/admin/disruptions"),
+        api.get("/api/admin/claims"),
+      ]);
+      setDisruptions(disruptionsResponse.data.data.disruptions);
+      setClaims(claimsResponse.data.data.claims);
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to load admin data"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const updateClaimStatus = async (id, status) => {
+  useEffect(() => {
+    loadAdminData();
+  }, []);
+
+  const updateClaim = async (claimId, status) => {
+    setActionLoading(true);
+    setError("");
+    setMessage("");
+
     try {
-      await api.put(`/api/claims/${id}/status`, { status })
-      fetchData()
-    } catch (err) { console.error(err) }
-  }
+      await api.put(`/api/admin/claims/${claimId}`, { status });
+      setMessage(`Claim ${status} successfully.`);
+      await loadAdminData();
+    } catch (requestError) {
+      setError(getApiError(requestError, `Unable to ${status} claim`));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
-  const fireTrigger = async () => {
-    setTriggerLoading(true)
+  const triggerCurfew = async (event) => {
+    event.preventDefault();
+    setActionLoading(true);
+    setError("");
+    setMessage("");
+
     try {
-      await api.post('/api/triggers/manual', triggerForm)
-      fetchData()
-    } catch (err) { console.error(err) }
-    setTriggerLoading(false)
+      await api.post("/api/admin/trigger-curfew", curfewForm);
+      setMessage("Curfew simulation triggered successfully.");
+      await loadAdminData();
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to trigger curfew"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="gs-shell flex min-h-[60vh] items-center justify-center">
+        <LoadingSpinner label="Loading admin operations" />
+      </main>
+    );
   }
-
-  if (loading) return <div className="max-w-7xl mx-auto px-4 py-8"><div className="animate-pulse space-y-6"><div className="h-8 bg-gs-border rounded w-1/4" /><div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(i=><div key={i} className="h-24 bg-gs-card rounded-xl"/>)}</div></div></div>
-
-  const statCards = [
-    { icon: HiShieldCheck, label: 'Active Policies', value: stats?.activePolicies || 0, color: 'text-gs-teal' },
-    { icon: HiDocumentText, label: 'Total Claims', value: stats?.totalClaims || 0, color: 'text-gs-warning' },
-    { icon: HiCurrencyRupee, label: 'Total Payout', value: `₹${stats?.totalPayout || 0}`, color: 'text-gs-success' },
-    { icon: HiClock, label: 'Pending Reviews', value: stats?.pendingClaims || 0, color: 'text-gs-danger' },
-  ]
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 animate-fade-in" id="admin-panel">
-      <h1 className="text-2xl font-bold mb-6">Admin Panel</h1>
+    <main className="gs-shell space-y-8">
+      <section className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="gs-card">
+          <span className="gs-kicker">Admin panel</span>
+          <h1 className="mt-5 text-3xl font-extrabold text-white">Disruption control room</h1>
+          <p className="mt-3 text-sm leading-7 text-slate-300">Approve or reject claims, inspect fraud scores, and simulate civic curfews for demo scenarios.</p>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statCards.map(s => (
-          <div key={s.label} className="gs-card !p-4">
-            <s.icon className={`w-8 h-8 ${s.color} mb-2`} />
-            <p className="text-2xl font-bold">{s.value}</p>
-            <p className="text-xs text-gs-text-muted">{s.label}</p>
+          <form onSubmit={triggerCurfew} className="mt-8 space-y-5">
+            <div>
+              <label className="gs-label" htmlFor="admin-city">City</label>
+              <input id="admin-city" className="gs-input" value={curfewForm.city} onChange={(event) => setCurfewForm((current) => ({ ...current, city: event.target.value }))} />
+            </div>
+            <div>
+              <label className="gs-label" htmlFor="admin-pincode">Pincode</label>
+              <input id="admin-pincode" className="gs-input" value={curfewForm.pincode} onChange={(event) => setCurfewForm((current) => ({ ...current, pincode: event.target.value }))} />
+            </div>
+            {error ? <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
+            {message ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{message}</div> : null}
+            <button type="submit" className="gs-btn-primary w-full" disabled={actionLoading}>
+              {actionLoading ? <LoadingSpinner label="Processing admin action" /> : "Trigger curfew event"}
+            </button>
+          </form>
+        </div>
+
+        <div className="gs-card overflow-hidden">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-2xl font-bold text-white">Active disruption events</h2>
+            <button onClick={loadAdminData} className="gs-btn-secondary">Refresh</button>
           </div>
-        ))}
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Claims Table */}
-        <div className="lg:col-span-2">
-          <h2 className="text-lg font-semibold mb-4">All Claims</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-gs-border text-gs-text-muted text-left">
-                <th className="pb-3 pr-4">Type</th><th className="pb-3 pr-4">Pincode</th><th className="pb-3 pr-4">Payout</th><th className="pb-3 pr-4">Status</th><th className="pb-3">Action</th>
-              </tr></thead>
+          <div className="mt-6 overflow-x-auto">
+            <table className="min-w-full text-left text-sm text-slate-300">
+              <thead className="text-xs uppercase tracking-[0.25em] text-slate-500">
+                <tr>
+                  <th className="pb-4 pr-4">Trigger</th>
+                  <th className="pb-4 pr-4">Zone</th>
+                  <th className="pb-4 pr-4">Severity</th>
+                  <th className="pb-4">Affected</th>
+                </tr>
+              </thead>
               <tbody>
-                {claims.slice(0, 20).map(c => (
-                  <tr key={c.id} className="border-b border-gs-border/50">
-                    <td className="py-3 pr-4"><TriggerBadge type={c.triggerType} /></td>
-                    <td className="py-3 pr-4">{c.pincode}</td>
-                    <td className="py-3 pr-4 text-gs-success">₹{c.payoutAmount}</td>
-                    <td className="py-3 pr-4"><span className={`gs-badge ${c.status==='Paid'?'gs-badge-success':c.status==='Pending'?'gs-badge-warning':c.status==='Rejected'?'gs-badge-danger':'gs-badge-teal'}`}>{c.status}</span></td>
-                    <td className="py-3">
-                      {c.status !== 'Paid' && c.status !== 'Rejected' && (
-                        <select className="gs-select !py-1 !px-2 text-xs !w-auto" value="" onChange={(e) => {if(e.target.value) updateClaimStatus(c.id, e.target.value)}}>
-                          <option value="">Update</option>
-                          <option value="Verified">Verify</option>
-                          <option value="Paid">Pay</option>
-                          <option value="Rejected">Reject</option>
-                        </select>
-                      )}
-                    </td>
+                {disruptions.map((event) => (
+                  <tr key={event._id} className="border-t border-white/10 align-top">
+                    <td className="py-4 pr-4 font-semibold text-white">{titleize(event.trigger_type)}</td>
+                    <td className="py-4 pr-4">{event.city} {event.pincode}<div className="mt-1 text-xs text-slate-500">{formatDate(event.timestamp)}</div></td>
+                    <td className="py-4 pr-4"><StatusBadge value={event.severity === "critical" ? "flagged_fraud" : "pending_verification"} /></td>
+                    <td className="py-4">{event.affected_policies.length}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
+      </section>
 
-        {/* Manual Trigger + Disruptions */}
-        <div className="space-y-6">
-          <div className="gs-card">
-            <h3 className="font-semibold mb-3">🔥 Manual Trigger</h3>
-            <div className="space-y-3">
-              <select className="gs-select" value={triggerForm.triggerType} onChange={(e) => setTriggerForm(p => ({...p, triggerType: e.target.value}))}>
-                <option value="curfew">Curfew</option>
-                <option value="flood">Flood</option>
-              </select>
-              <select className="gs-select" value={triggerForm.pincode} onChange={(e) => setTriggerForm(p => ({...p, pincode: e.target.value}))}>
-                {PINCODES.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <button onClick={fireTrigger} disabled={triggerLoading} className="w-full gs-btn-danger !py-2.5">{triggerLoading ? 'Firing...' : '🔥 Fire Trigger'}</button>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="font-semibold mb-3">Recent Disruptions</h3>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {disruptions.slice(0, 10).map(d => (
-                <div key={d.id} className="gs-card !p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <TriggerBadge type={d.triggerType} />
-                    <span className="text-[10px] text-gs-text-muted">{new Date(d.detectedAt).toLocaleString()}</span>
-                  </div>
-                  <p className="text-xs text-gs-text-muted">{d.triggerValue}</p>
-                  <p className="text-xs text-gs-text-muted mt-1">Zone {d.pincode} • {d.claimsCreated} claims</p>
-                </div>
+      <section className="gs-card overflow-hidden">
+        <h2 className="text-2xl font-bold text-white">All claims with FCS scoring</h2>
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full text-left text-sm text-slate-300">
+            <thead className="text-xs uppercase tracking-[0.25em] text-slate-500">
+              <tr>
+                <th className="pb-4 pr-4">Worker</th>
+                <th className="pb-4 pr-4">Disruption</th>
+                <th className="pb-4 pr-4">Amount</th>
+                <th className="pb-4 pr-4">FCS</th>
+                <th className="pb-4 pr-4">Status</th>
+                <th className="pb-4">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {claims.map((claim) => (
+                <tr key={claim._id} className="border-t border-white/10 align-top">
+                  <td className="py-4 pr-4">
+                    <p className="font-semibold text-white">{claim.worker_id?.name || "Worker"}</p>
+                    <p className="mt-1 text-xs text-slate-500">{claim.worker_id?.city} {claim.worker_id?.pincode}</p>
+                  </td>
+                  <td className="py-4 pr-4">
+                    <p>{titleize(claim.disruption_type)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatDate(claim.createdAt)}</p>
+                  </td>
+                  <td className="py-4 pr-4">{formatCurrency(claim.amount)}</td>
+                  <td className="py-4 pr-4"><StatusBadge value={scoreTone(claim.fcs_score)} className="min-w-[88px] justify-center" /> <span className="mt-2 block text-xs text-slate-400">{claim.fcs_score}</span></td>
+                  <td className="py-4 pr-4"><StatusBadge value={claim.status} /></td>
+                  <td className="py-4">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button className="gs-btn-primary !px-4 !py-2 text-sm" disabled={actionLoading} onClick={() => updateClaim(claim._id, "approved")}>
+                        Approve
+                      </button>
+                      <button className="gs-btn-secondary !px-4 !py-2 text-sm" disabled={actionLoading} onClick={() => updateClaim(claim._id, "rejected")}>
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
-      </div>
-    </div>
-  )
+      </section>
+    </main>
+  );
 }

@@ -1,170 +1,120 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { HiShieldCheck } from 'react-icons/hi'
+﻿import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { getApiError } from "../utils/api";
 
-const PLATFORMS = ['Zomato', 'Swiggy', 'Zepto', 'Blinkit', 'Other']
-const PINCODES = [
-  { code: '500001', city: 'Hyderabad' },
-  { code: '600001', city: 'Chennai' },
-  { code: '400001', city: 'Mumbai' },
-  { code: '110001', city: 'Delhi' },
-  { code: '560001', city: 'Bangalore' },
-  { code: '700001', city: 'Kolkata' },
-  { code: '411001', city: 'Pune' },
-  { code: '530001', city: 'Visakhapatnam' },
-  { code: '522001', city: 'Guntur' },
-  { code: '521001', city: 'Vijayawada' },
-]
+const platforms = ["Zomato", "Swiggy", "Zepto", "Blinkit", "Other"];
 
 export default function Register() {
-  const { signUp, createWorkerProfile } = useAuth()
-  const navigate = useNavigate()
-  const [step, setStep] = useState(1) // 1=email, 2=profile
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [form, setForm] = useState({
-    email: '', password: '', confirmPassword: '',
-    name: '', phone: '', city: '', pincode: '', platform: 'Zomato', weeklyEarnings: '',
-  })
+  const navigate = useNavigate();
+  const { registerUser } = useAuth();
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    city: "",
+    pincode: "",
+    platform: "Swiggy",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const updateForm = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
+  const handleChange = (event) => {
+    setFormData((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+    }));
+  };
 
-  const handleSignUp = async (e) => {
-    e.preventDefault()
-    setError('')
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
 
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters')
-      return
-    }
-
-    setLoading(true)
     try {
-      await signUp(form.email, form.password)
-      setStep(2)
-    } catch (err) {
-      setError(err.message)
+      await registerUser(formData);
+      navigate("/dashboard");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Registration failed"));
+    } finally {
+      setSubmitting(false);
     }
-    setLoading(false)
-  }
-
-  const handleProfile = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      const selectedPincode = PINCODES.find(p => p.code === form.pincode)
-      await createWorkerProfile({
-        name: form.name,
-        phone: form.phone,
-        city: selectedPincode?.city || form.city,
-        pincode: form.pincode,
-        platform: form.platform,
-        weeklyEarnings: parseFloat(form.weeklyEarnings),
-      })
-      navigate('/dashboard')
-    } catch (err) {
-      setError(err.message)
-    }
-    setLoading(false)
-  }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <HiShieldCheck className="w-12 h-12 text-gs-teal mx-auto mb-3" />
-          <h1 className="text-2xl font-bold">Create Your Account</h1>
-          <p className="text-sm text-gs-text-muted mt-1">
-            {step === 1 ? 'Step 1: Create login credentials' : 'Step 2: Complete your worker profile'}
+    <main className="gs-shell flex min-h-[calc(100vh-88px)] items-center justify-center py-12">
+      <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="rounded-[32px] border border-teal-400/15 bg-gradient-to-br from-teal-950/60 via-slate-900 to-slate-900 p-8">
+          <span className="gs-kicker">Worker onboarding</span>
+          <h1 className="mt-6 text-4xl font-extrabold text-white">Start your GigShield protection in one setup.</h1>
+          <p className="mt-4 text-sm leading-7 text-slate-300">
+            We use your delivery zone, city, and platform to price risk, activate coverage, and monitor disruption triggers.
           </p>
-        </div>
-
-        {/* Progress */}
-        <div className="flex items-center space-x-3 mb-8">
-          <div className={`flex-1 h-1.5 rounded-full ${step >= 1 ? 'bg-gs-teal' : 'bg-gs-border'}`} />
-          <div className={`flex-1 h-1.5 rounded-full ${step >= 2 ? 'bg-gs-teal' : 'bg-gs-border'}`} />
-        </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-gs-danger/10 border border-gs-danger/30 rounded-lg text-sm text-gs-danger">
-            {error}
+          <div className="mt-10 space-y-4 text-sm text-slate-300">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">Weekly cover quotes tailored to your city and pincode.</div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">Claims history, notifications, and payouts available right after login.</div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">Fallback demo data keeps the experience working even without live API keys.</div>
           </div>
-        )}
+        </section>
 
-        {step === 1 ? (
-          <form onSubmit={handleSignUp} className="space-y-4" id="register-form-step1">
+        <section className="gs-card">
+          <h2 className="text-2xl font-bold text-white">Create worker account</h2>
+          <p className="mt-2 text-sm text-slate-400">Register as a delivery partner to access the dashboard and buy a policy.</p>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Email</label>
-              <input type="email" required className="gs-input" placeholder="your@email.com"
-                value={form.email} onChange={(e) => updateForm('email', e.target.value)} />
+              <label className="gs-label" htmlFor="name">Full name</label>
+              <input id="name" name="name" className="gs-input" value={formData.name} onChange={handleChange} placeholder="Rider name" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Password</label>
-              <input type="password" required className="gs-input" placeholder="Min 6 characters"
-                value={form.password} onChange={(e) => updateForm('password', e.target.value)} />
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="gs-label" htmlFor="email">Email</label>
+                <input id="email" name="email" type="email" className="gs-input" value={formData.email} onChange={handleChange} placeholder="you@example.com" />
+              </div>
+              <div>
+                <label className="gs-label" htmlFor="password">Password</label>
+                <input id="password" name="password" type="password" className="gs-input" value={formData.password} onChange={handleChange} placeholder="Minimum 6 characters" />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Confirm Password</label>
-              <input type="password" required className="gs-input" placeholder="Confirm password"
-                value={form.confirmPassword} onChange={(e) => updateForm('confirmPassword', e.target.value)} />
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="gs-label" htmlFor="phone">Phone</label>
+                <input id="phone" name="phone" className="gs-input" value={formData.phone} onChange={handleChange} placeholder="9876543210" />
+              </div>
+              <div>
+                <label className="gs-label" htmlFor="platform">Platform</label>
+                <select id="platform" name="platform" className="gs-input" value={formData.platform} onChange={handleChange}>
+                  {platforms.map((platform) => (
+                    <option key={platform} value={platform}>{platform}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <button type="submit" disabled={loading} className="w-full gs-btn-primary !py-3">
-              {loading ? 'Creating Account...' : 'Continue →'}
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="gs-label" htmlFor="city">City</label>
+                <input id="city" name="city" className="gs-input" value={formData.city} onChange={handleChange} placeholder="Bengaluru" />
+              </div>
+              <div>
+                <label className="gs-label" htmlFor="pincode">Pincode</label>
+                <input id="pincode" name="pincode" className="gs-input" value={formData.pincode} onChange={handleChange} placeholder="560001" />
+              </div>
+            </div>
+
+            {error ? <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
+
+            <button type="submit" className="gs-btn-primary w-full" disabled={submitting}>
+              {submitting ? <LoadingSpinner label="Creating account" /> : "Create account"}
             </button>
           </form>
-        ) : (
-          <form onSubmit={handleProfile} className="space-y-4" id="register-form-step2">
-            <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Full Name</label>
-              <input type="text" required className="gs-input" placeholder="Your full name"
-                value={form.name} onChange={(e) => updateForm('name', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Phone Number</label>
-              <input type="tel" required className="gs-input" placeholder="+91 9XXXXXXXXX"
-                value={form.phone} onChange={(e) => updateForm('phone', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Delivery Zone (Pincode)</label>
-              <select required className="gs-select"
-                value={form.pincode} onChange={(e) => updateForm('pincode', e.target.value)}>
-                <option value="">Select your zone</option>
-                {PINCODES.map(p => (
-                  <option key={p.code} value={p.code}>{p.code} — {p.city}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Platform</label>
-              <select required className="gs-select"
-                value={form.platform} onChange={(e) => updateForm('platform', e.target.value)}>
-                {PLATFORMS.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gs-text-muted mb-1.5">Weekly Earnings (₹)</label>
-              <input type="number" required className="gs-input" placeholder="e.g. 3000"
-                value={form.weeklyEarnings} onChange={(e) => updateForm('weeklyEarnings', e.target.value)} />
-            </div>
-            <button type="submit" disabled={loading} className="w-full gs-btn-primary !py-3">
-              {loading ? 'Saving Profile...' : 'Complete Registration ✓'}
-            </button>
-          </form>
-        )}
 
-        <p className="text-center text-sm text-gs-text-muted mt-6">
-          Already have an account? <Link to="/login" className="text-gs-teal hover:underline">Login</Link>
-        </p>
+          <p className="mt-6 text-sm text-slate-400">
+            Already registered? <Link to="/login" className="font-semibold text-teal-300">Sign in here</Link>
+          </p>
+        </section>
       </div>
-    </div>
-  )
+    </main>
+  );
 }
