@@ -110,9 +110,13 @@ export default function Claims() {
               <div className="mt-5 flex flex-wrap gap-4 text-sm text-slate-400">
                 <span>{formatDate(claim.createdAt)}</span>
                 <span>Amount {formatCurrency(claim.amount)}</span>
-                <span>FCS {claim.fcs_score}</span>
                 <span>{claim.auto_triggered ? "Auto-triggered" : "Manual"}</span>
               </div>
+              {["Pending", "Flagged", "pending_verification", "flagged_fraud"].includes(claim.status) || ["Pending", "Flagged"].includes(claim.fcsDecision) ? (
+                <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  Your claim is under verification. You'll hear back within 2 hours.
+                </div>
+              ) : null}
             </div>
           )) : <p className="text-sm text-slate-400">No claims filed yet.</p>}
         </div>

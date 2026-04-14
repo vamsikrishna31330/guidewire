@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activityTab, setActivityTab] = useState("claims");
 
   const loadSummary = async () => {
     setLoading(true);
@@ -62,8 +63,9 @@ export default function Dashboard() {
     );
   }
 
-  const { worker, active_policy, claims, payouts, notifications, risk_snapshot } = summary;
+  const { worker, active_policy, claims, paid_claims, payouts, notifications, renewal, risk_snapshot } = summary;
   const totalPaid = payouts.reduce((sum, payout) => sum + payout.amount, 0);
+  const payoutClaims = paid_claims?.length ? paid_claims : claims.filter((claim) => ["Paid", "approved", "auto_approved", "Verified"].includes(claim.status));
 
   return (
     <main className="gs-shell space-y-8">
@@ -78,6 +80,11 @@ export default function Dashboard() {
             <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">{worker.platform}</div>
             <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Payout balance {formatCurrency(worker.payout_balance)}</div>
           </div>
+          {renewal?.showReminder ? (
+            <div className="mt-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-5 py-4 text-sm font-semibold text-amber-100">
+              Your policy expires in {renewal.daysUntilExpiry} day{renewal.daysUntilExpiry === 1 ? "" : "s"}. Renew now to stay covered.
+            </div>
+          ) : null}
         </div>
         <div className="gs-card !bg-black/20">
           <div className="flex items-center justify-between gap-4">
@@ -98,7 +105,7 @@ export default function Dashboard() {
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Weekly premium" value={formatCurrency(risk_snapshot.weekly_premium)} subtext="Live quote for your zone" icon={<FiShield />} />
-        <StatCard label="Coverage amount" value={formatCurrency(risk_snapshot.coverage_amount)} subtext="Auto-linked to a weekly cover" icon={<FiCreditCard />} />
+        <StatCard label="Earnings protected this week" value={formatCurrency(active_policy?.coverage_amount || risk_snapshot.coverage_amount)} subtext="Active coverage amount" icon={<FiCreditCard />} />
         <StatCard label="Claims filed" value={claims.length} subtext="Manual and auto-triggered" icon={<FiActivity />} />
         <StatCard label="Payouts completed" value={formatCurrency(totalPaid)} subtext={`${payouts.length} payout records`} icon={<FiBell />} />
       </section>
@@ -131,11 +138,25 @@ export default function Dashboard() {
 
           <article className="gs-card">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-2xl font-bold text-white">Recent claims</h2>
+              <h2 className="text-2xl font-bold text-white">{activityTab === "claims" ? "Recent claims" : "Payout history"}</h2>
               <Link to="/claims" className="text-sm font-semibold text-teal-300">Manage claims</Link>
             </div>
+            <div className="mt-5 flex rounded-2xl border border-white/10 bg-white/5 p-1 text-sm">
+              <button
+                className={`flex-1 rounded-xl px-4 py-2 font-semibold ${activityTab === "claims" ? "bg-teal-500 text-slate-950" : "text-slate-300"}`}
+                onClick={() => setActivityTab("claims")}
+              >
+                Claims
+              </button>
+              <button
+                className={`flex-1 rounded-xl px-4 py-2 font-semibold ${activityTab === "payouts" ? "bg-teal-500 text-slate-950" : "text-slate-300"}`}
+                onClick={() => setActivityTab("payouts")}
+              >
+                Payout History
+              </button>
+            </div>
             <div className="mt-6 space-y-4">
-              {claims.length ? claims.slice(0, 4).map((claim) => (
+              {activityTab === "claims" && claims.length ? claims.slice(0, 4).map((claim) => (
                 <div key={claim._id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -147,10 +168,27 @@ export default function Dashboard() {
                   <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-400">
                     <span>{formatDate(claim.createdAt)}</span>
                     <span>Amount {formatCurrency(claim.amount)}</span>
-                    <span>FCS {claim.fcs_score}</span>
+                  </div>
+                  {["Pending", "Flagged", "pending_verification", "flagged_fraud"].includes(claim.status) || ["Pending", "Flagged"].includes(claim.fcsDecision) ? (
+                    <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                      Your claim is under verification. You'll hear back within 2 hours.
+                    </div>
+                  ) : null}
+                </div>
+              )) : null}
+              {activityTab === "payouts" && payoutClaims.length ? payoutClaims.map((claim) => (
+                <div key={claim._id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-lg font-semibold text-white">{titleize(claim.disruption_type)}</p>
+                      <p className="mt-1 text-sm text-slate-400">Payout received on {formatDate(claim.updatedAt || claim.createdAt)}</p>
+                    </div>
+                    <p className="text-xl font-extrabold text-emerald-300">{formatCurrency(claim.payoutAmount || claim.amount)}</p>
                   </div>
                 </div>
-              )) : <p className="text-sm text-slate-400">No claims filed yet.</p>}
+              )) : null}
+              {activityTab === "claims" && !claims.length ? <p className="text-sm text-slate-400">No claims filed yet.</p> : null}
+              {activityTab === "payouts" && !payoutClaims.length ? <p className="text-sm text-slate-400">No paid claims yet.</p> : null}
             </div>
           </article>
         </div>

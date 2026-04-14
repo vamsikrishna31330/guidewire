@@ -36,15 +36,17 @@ const eventAlreadyCreatedRecently = async ({ triggerType, city, pincode }) => {
   return Boolean(existing);
 };
 
-const createDisruptionEvent = async ({ trigger, city, pincode, affectedPolicies }) => {
-  const duplicate = await eventAlreadyCreatedRecently({
-    triggerType: trigger.trigger_type,
-    city,
-    pincode,
-  });
+const createDisruptionEvent = async ({ trigger, city, pincode, affectedPolicies, allowDuplicate = false }) => {
+  if (!allowDuplicate) {
+    const duplicate = await eventAlreadyCreatedRecently({
+      triggerType: trigger.trigger_type,
+      city,
+      pincode,
+    });
 
-  if (duplicate) {
-    return null;
+    if (duplicate) {
+      return null;
+    }
   }
 
   return DisruptionEvent.create({
@@ -57,15 +59,17 @@ const createDisruptionEvent = async ({ trigger, city, pincode, affectedPolicies 
   });
 };
 
-const ensureAutoClaimForPolicy = async (policy, trigger) => {
-  const existingClaim = await Claim.findOne({
-    policy_id: policy._id,
-    disruption_type: trigger.trigger_type,
-    createdAt: { $gte: new Date(Date.now() - (24 * 60 * 60 * 1000)) },
-  });
+const ensureAutoClaimForPolicy = async (policy, trigger, forceCreate = false) => {
+  if (!forceCreate) {
+    const existingClaim = await Claim.findOne({
+      policy_id: policy._id,
+      disruption_type: trigger.trigger_type,
+      createdAt: { $gte: new Date(Date.now() - (24 * 60 * 60 * 1000)) },
+    });
 
-  if (existingClaim) {
-    return existingClaim;
+    if (existingClaim) {
+      return existingClaim;
+    }
   }
 
   const worker = policy.worker_id?._id ? policy.worker_id : await Worker.findById(policy.worker_id);
@@ -131,6 +135,37 @@ const triggerCurfew = async (city, pincode) => {
   return { event, affectedCount: policies.length };
 };
 
+const triggerManualEvent = async ({ city, pincode, triggerType = "HEAVY_RAIN", severity = "high" }) => {
+  const policies = await Policy.find({
+    city,
+    pincode,
+    status: "active",
+    end_date: { $gte: new Date() },
+  }).populate("worker_id");
+
+  const manualTrigger = {
+    trigger_type: triggerType,
+    severity,
+    metric: `Manual admin ${triggerType.replaceAll("_", " ").toLowerCase()} simulation`,
+  };
+
+  const event = await createDisruptionEvent({
+    trigger: manualTrigger,
+    city,
+    pincode,
+    affectedPolicies: policies,
+    allowDuplicate: true,
+  });
+
+  if (event) {
+    for (const policy of policies) {
+      await ensureAutoClaimForPolicy(policy, manualTrigger, true);
+    }
+  }
+
+  return { event, affectedCount: policies.length };
+};
+
 const runDisruptionMonitor = async () => {
   console.log(`[GigShield Cron] Running disruption monitor at ${new Date().toISOString()}`);
   const policies = await getActivePolicies();
@@ -184,5 +219,6 @@ const runDisruptionMonitor = async () => {
 module.exports = {
   evaluateZone,
   triggerCurfew,
+  triggerManualEvent,
   runDisruptionMonitor,
 };

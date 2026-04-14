@@ -1,4 +1,4 @@
-﻿const Payout = require("../models/Payout");
+const Payout = require("../models/Payout");
 const Worker = require("../models/Worker");
 
 const processPayoutForClaim = async (claim) => {
@@ -8,15 +8,17 @@ const processPayoutForClaim = async (claim) => {
     return existingPayout;
   }
 
+  const amount = claim.payoutAmount || claim.amount;
+  const workerId = claim.worker_id?._id || claim.worker_id;
   const payout = await Payout.create({
-    worker_id: claim.worker_id,
+    worker_id: workerId,
     claim_id: claim._id,
-    amount: claim.amount,
+    amount,
     status: "completed",
   });
 
-  await Worker.findByIdAndUpdate(claim.worker_id, {
-    $inc: { payout_balance: claim.amount },
+  await Worker.findByIdAndUpdate(workerId, {
+    $inc: { payout_balance: amount },
   });
 
   return payout;

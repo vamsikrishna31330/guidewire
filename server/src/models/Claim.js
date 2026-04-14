@@ -28,9 +28,27 @@ const claimSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    payoutAmount: {
+      type: Number,
+      default: 0,
+    },
     fcs_score: {
       type: Number,
       default: 0,
+    },
+    fcsScore: {
+      type: Number,
+      default: 0,
+    },
+    fcsBreakdown: {
+      type: Object,
+      default: {},
+    },
+    fcsDecision: {
+      type: String,
+      enum: ["Verified", "Pending", "Flagged"],
+      default: "Pending",
+      index: true,
     },
     status: {
       type: String,
@@ -39,10 +57,35 @@ const claimSchema = new mongoose.Schema(
         "pending_verification",
         "flagged_fraud",
         "approved",
-        "rejected"
+        "rejected",
+        "Verified",
+        "Pending",
+        "Flagged",
+        "Paid"
       ],
       default: "pending_verification",
       index: true,
+    },
+    claimed_pincode: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true,
+    },
+    razorpayOrderId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    razorpayPaymentId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    razorpaySignature: {
+      type: String,
+      default: "",
+      trim: true,
     },
     auto_triggered: {
       type: Boolean,

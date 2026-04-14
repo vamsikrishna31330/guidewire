@@ -1,51 +1,26 @@
-﻿const Claim = require("../models/Claim");
+const Claim = require("../models/Claim");
 const Policy = require("../models/Policy");
 const Notification = require("../models/Notification");
+const { applyFcsToClaim, calculateFcs } = require("../middleware/fcsMiddleware");
 const { processPayoutForClaim } = require("./payoutService");
-
-const calculateFraudSignals = async ({ worker, policy, locationProof }) => {
-  const normalizedProof = (locationProof || "").toLowerCase();
-  const mock_location_flag = ["mock", "spoof", "fake", "simulated"].some((term) =>
-    normalizedProof.includes(term)
-  );
-
-  const claimWindowStart = new Date(Date.now() - (24 * 60 * 60 * 1000));
-  const recentClaimCount = await Claim.countDocuments({
-    worker_id: worker._id,
-    createdAt: { $gte: claimWindowStart },
-  });
-
-  const claim_velocity = recentClaimCount >= 2 ? 30 : 0;
-  const historical_presence_mismatch = worker.city.toLowerCase() !== policy.city.toLowerCase();
-
-  const fcs_score =
-    (mock_location_flag ? 40 : 0) +
-    claim_velocity +
-    (historical_presence_mismatch ? 20 : 0);
-
-  let status = "pending_verification";
-  if (fcs_score < 30) {
-    status = "auto_approved";
-  } else if (fcs_score > 70) {
-    status = "flagged_fraud";
-  }
-
-  return {
-    fcs_score,
-    status,
-    fraud_signals: {
-      mock_location_flag,
-      claim_velocity,
-      historical_presence_mismatch,
-    },
-  };
-};
 
 const createNotification = async (workerId, message) => {
   return Notification.create({
     worker_id: workerId,
     message,
   });
+};
+
+const legacyStatusFromDecision = (decision) => {
+  if (decision === "Verified") {
+    return "Verified";
+  }
+
+  if (decision === "Flagged") {
+    return "Flagged";
+  }
+
+  return "Pending";
 };
 
 const createClaim = async ({
@@ -55,40 +30,38 @@ const createClaim = async ({
   description,
   locationProof,
   autoTriggered = false,
-  presetStatus,
-  presetFcs = 0,
+  claimedPincode,
 }) => {
-  const fraudEvaluation = autoTriggered
-    ? {
-        fcs_score: presetFcs,
-        status: presetStatus || "pending_verification",
-        fraud_signals: {
-          mock_location_flag: false,
-          claim_velocity: 0,
-          historical_presence_mismatch: false,
-        },
-      }
-    : await calculateFraudSignals({
-        worker,
-        policy,
-        locationProof,
-      });
+  const payoutAmount = policy.coverage_amount;
+  const claimData = {
+    worker_id: worker._id,
+    policy_id: policy._id,
+    disruption_type: disruptionType,
+    claimed_pincode: claimedPincode || policy.pincode,
+    amount: payoutAmount,
+    payoutAmount,
+  };
+  const fcs = await calculateFcs({ worker, policy, claimData });
 
   const claim = await Claim.create({
-    policy_id: policy._id,
-    worker_id: worker._id,
-    disruption_type: disruptionType,
+    ...claimData,
     description,
-    amount: policy.coverage_amount,
-    fcs_score: fraudEvaluation.fcs_score,
-    status: fraudEvaluation.status,
+    fcs_score: fcs.fcsScore,
+    fcsScore: fcs.fcsScore,
+    fcsBreakdown: fcs.fcsBreakdown,
+    fcsDecision: fcs.fcsDecision,
+    status: legacyStatusFromDecision(fcs.fcsDecision),
     auto_triggered: autoTriggered,
     location_proof: locationProof || "",
-    fraud_signals: fraudEvaluation.fraud_signals,
+    fraud_signals: {
+      mock_location_flag: false,
+      claim_velocity: fcs.fcsBreakdown.claim_velocity.points,
+      historical_presence_mismatch: fcs.fcsBreakdown.zone_mismatch.risk,
+    },
   });
 
   let payout = null;
-  if (claim.status === "auto_approved" || claim.status === "approved") {
+  if (claim.fcsDecision === "Verified") {
     payout = await processPayoutForClaim(claim);
   }
 
@@ -96,13 +69,13 @@ const createClaim = async ({
     worker._id,
     autoTriggered
       ? `GigShield auto-created a ${disruptionType} claim for your zone.`
-      : `Your ${disruptionType} claim was submitted with status ${claim.status}.`
+      : `Your ${disruptionType} claim was submitted and marked ${claim.fcsDecision}.`
   );
 
   return { claim, payout };
 };
 
-const verifyClaim = async (claimId, status) => {
+const verifyClaim = async (claimId, status, { forcePay = false } = {}) => {
   const claim = await Claim.findById(claimId);
   if (!claim) {
     const error = new Error("Claim not found");
@@ -110,19 +83,44 @@ const verifyClaim = async (claimId, status) => {
     throw error;
   }
 
-  claim.status = status;
-  await claim.save();
+  const policy = await Policy.findById(claim.policy_id);
+  await claim.populate("worker_id");
+  await applyFcsToClaim(claim, { worker: claim.worker_id, policy });
 
-  let payout = null;
-  if (status === "approved") {
-    payout = await processPayoutForClaim(claim);
+  if (status === "rejected") {
+    claim.status = "rejected";
+    await claim.save();
+    await createNotification(
+      claim.worker_id._id || claim.worker_id,
+      `Your claim for ${claim.disruption_type} has been rejected after review.`
+    );
+    return { claim, payout: null };
   }
 
+  if (claim.fcsDecision === "Flagged" && !forcePay) {
+    claim.status = "Flagged";
+    await claim.save();
+    await createNotification(
+      claim.worker_id._id || claim.worker_id,
+      `Your claim for ${claim.disruption_type} is under verification. You'll hear back within 2 hours.`
+    );
+    return {
+      claim,
+      payout: null,
+      blocked: true,
+      message: "Claim is flagged by FCS and requires Override & Pay.",
+    };
+  }
+
+  claim.status = forcePay ? "approved" : "Verified";
+  claim.fcsDecision = forcePay ? "Verified" : claim.fcsDecision;
+  await claim.save();
+
+  const payout = await processPayoutForClaim(claim);
+
   await createNotification(
-    claim.worker_id,
-    status === "approved"
-      ? `Your claim for ${claim.disruption_type} has been approved.`
-      : `Your claim for ${claim.disruption_type} has been rejected after review.`
+    claim.worker_id._id || claim.worker_id,
+    `Your claim for ${claim.disruption_type} has been approved.`
   );
 
   return { claim, payout };
@@ -137,7 +135,7 @@ const getActivePolicyForWorker = async (workerId) => {
 };
 
 module.exports = {
-  calculateFraudSignals,
+  calculateFcs,
   createClaim,
   verifyClaim,
   getActivePolicyForWorker,

@@ -29,13 +29,22 @@ const getDashboardSummary = asyncHandler(async (req, res) => {
 
   const liveRisk = calculateRiskQuote(conditions);
   const activePolicy = policies.find((policy) => policy.status === "active") || null;
+  const paidClaims = claims.filter((claim) => ["Paid", "approved", "auto_approved", "Verified"].includes(claim.status));
+  const daysUntilExpiry = activePolicy
+    ? Math.ceil((new Date(activePolicy.end_date).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    : null;
 
   return sendSuccess(res, {
     worker: req.user,
     active_policy: activePolicy,
     claims,
+    paid_claims: paidClaims,
     payouts,
     notifications,
+    renewal: {
+      showReminder: activePolicy ? daysUntilExpiry <= 2 && daysUntilExpiry >= 0 : false,
+      daysUntilExpiry,
+    },
     risk_snapshot: {
       ...liveRisk,
       live_conditions: conditions,
